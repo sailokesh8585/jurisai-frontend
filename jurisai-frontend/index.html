@@ -1,0 +1,1363 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JurisAI - Multilingual AI Legal Assistant</title>
+    <!-- Backend URL config — update public/config.js with your ngrok URL -->
+    <script src="/config.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        navy: { 800: '#1e293b', 900: '#0f172a', 950: '#020617' },
+                        neon: { blue: '#3b82f6', cyan: '#06b6d4', purple: '#a855f7' }
+                    },
+                    animation: {
+                        'gradient-x': 'gradient-x 3s ease infinite',
+                        'float': 'float 6s ease-in-out infinite',
+                        'pulse-glow': 'pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'bounce-short': 'bounce-short 1s infinite'
+                    },
+                    keyframes: {
+                        'gradient-x': {
+                            '0%, 100%': { 'background-size': '200% 200%', 'background-position': 'left center' },
+                            '50%': { 'background-size': '200% 200%', 'background-position': 'right center' }
+                        },
+                        'float': {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-20px)' },
+                        },
+                        'pulse-glow': {
+                            '0%, 100%': { opacity: 1, filter: 'drop-shadow(0 0 10px rgba(6,182,212,0.5))' },
+                            '50%': { opacity: .7, filter: 'drop-shadow(0 0 20px rgba(168,85,247,0.8))' },
+                        },
+                        'bounce-short': {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-25%)' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body { background-color: #f8fafc; color: #0f172a; overflow-x: hidden; transition: background-color 0.3s ease, color 0.3s ease; }
+        .dark body { background-color: #0f172a; color: #f8fafc; }
+        .glass-card { background: rgba(255,255,255,0.7); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(0,0,0,0.05); box-shadow: 0 8px 32px 0 rgba(0,0,0,0.05); }
+        .dark .glass-card { background: rgba(30,41,59,0.6); border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 8px 32px 0 rgba(0,0,0,0.3); }
+        .glass-nav { background: rgba(255,255,255,0.8); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-bottom: 1px solid rgba(0,0,0,0.05); }
+        .dark .glass-nav { background: rgba(15,23,42,0.8); border-bottom: 1px solid rgba(255,255,255,0.05); }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .dark ::-webkit-scrollbar-thumb { background: #334155; }
+        .dark ::-webkit-scrollbar-thumb:hover { background: #475569; }
+        .typing-dot { animation: bounce-short 1.4s infinite ease-in-out both; }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        .blob { position: absolute; filter: blur(80px); z-index: -1; opacity: 0.4; }
+
+        /* Risk finding cards */
+        .risk-high  { border-left-color: #ef4444; }
+        .risk-medium{ border-left-color: #eab308; }
+        .risk-low   { border-left-color: #22c55e; }
+        .badge-high   { background: rgba(239,68,68,.15);  color: #f87171; border: 1px solid rgba(239,68,68,.3); }
+        .badge-medium { background: rgba(234,179,8,.15);  color: #facc15; border: 1px solid rgba(234,179,8,.3); }
+        .badge-low    { background: rgba(34,197,94,.15);  color: #4ade80; border: 1px solid rgba(34,197,94,.3); }
+
+        /* Summary section bullets */
+        .summary-content ul { list-style: disc; padding-left: 1rem; }
+        .summary-content li { margin-bottom: .25rem; }
+        .summary-content p  { margin-bottom: .5rem; }
+
+        /* Spinner */
+        .spin { animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="antialiased font-sans selection:bg-neon-purple selection:text-white transition-colors duration-300">
+
+    <div class="blob bg-neon-purple w-96 h-96 rounded-full top-0 left-[-100px]"></div>
+    <div class="blob bg-neon-cyan w-96 h-96 rounded-full bottom-0 right-[-100px]"></div>
+
+    <!-- ═══════════════════════════ NAV ═══════════════════════════ -->
+    <nav class="fixed w-full z-50 glass-nav transition-all duration-300">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-20">
+                <div class="flex-shrink-0 cursor-pointer" onclick="showSection('hero')">
+                    <span class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-neon-cyan to-neon-purple tracking-tight">
+                        <i class="fa-solid fa-scale-balanced mr-2 text-neon-cyan"></i>JurisAI
+                    </span>
+                </div>
+
+                <div class="hidden md:block">
+                    <div class="ml-10 flex items-center space-x-6">
+                        <a href="#" onclick="showSection('hero')" class="hover:text-neon-cyan text-slate-600 dark:text-gray-300 px-3 py-2 rounded-md text-sm font-medium transition-colors" data-i18n="navHome">Home</a>
+                        <a href="#" onclick="showSection('app-dashboard')" class="hover:text-neon-cyan text-slate-600 dark:text-gray-300 px-3 py-2 rounded-md text-sm font-medium transition-colors" data-i18n="navDashboard">Dashboard</a>
+                        <a href="#features" class="hover:text-neon-cyan text-slate-600 dark:text-gray-300 px-3 py-2 rounded-md text-sm font-medium transition-colors" data-i18n="navFeatures">Features</a>
+
+                        <button onclick="toggleTheme()" class="text-slate-500 dark:text-slate-400 hover:text-neon-blue dark:hover:text-neon-cyan transition-colors px-2" aria-label="Toggle Theme">
+                            <i id="theme-icon" class="fa-solid fa-sun text-lg"></i>
+                        </button>
+
+                        <!-- Language selector -->
+                        <div class="relative inline-block text-left group">
+                            <button type="button" class="inline-flex justify-center w-full rounded-md border border-slate-300 dark:border-slate-700 shadow-sm px-4 py-2 bg-white dark:bg-slate-800 text-sm font-medium text-slate-700 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-slate-700 focus:outline-none transition-all">
+                                <i class="fa-solid fa-globe mr-2 mt-0.5"></i><span id="current-lang">English</span>
+                                <i class="fa-solid fa-chevron-down ml-2 mt-0.5 text-xs"></i>
+                            </button>
+                            <div class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg glass-card ring-1 ring-black ring-opacity-5 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                                <div class="py-1 max-h-64 overflow-y-auto" role="menu">
+                                    <a href="#" onclick="setLanguage('en','English')"   class="lang-opt block px-4 py-2 text-sm text-slate-700 dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-slate-700">English</a>
+                                    <a href="#" onclick="setLanguage('hi','Hindi')"    class="lang-opt block px-4 py-2 text-sm text-slate-700 dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-slate-700">Hindi (हिंदी)</a>
+                                    <a href="#" onclick="setLanguage('bn','Bengali')"  class="lang-opt block px-4 py-2 text-sm text-slate-700 dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-slate-700">Bengali (বাংলা)</a>
+                                    <a href="#" onclick="setLanguage('te','Telugu')"   class="lang-opt block px-4 py-2 text-sm text-slate-700 dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-slate-700">Telugu (తెలుగు)</a>
+                                    <a href="#" onclick="setLanguage('mr','Marathi')"  class="lang-opt block px-4 py-2 text-sm text-slate-700 dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-slate-700">Marathi (मराठी)</a>
+                                    <a href="#" onclick="setLanguage('ta','Tamil')"    class="lang-opt block px-4 py-2 text-sm text-slate-700 dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-slate-700">Tamil (தமிழ்)</a>
+                                    <a href="#" onclick="setLanguage('gu','Gujarati')" class="lang-opt block px-4 py-2 text-sm text-slate-700 dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-slate-700">Gujarati (ગુજરાતી)</a>
+                                    <a href="#" onclick="setLanguage('kn','Kannada')"  class="lang-opt block px-4 py-2 text-sm text-slate-700 dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-slate-700">Kannada (ಕನ್ನಡ)</a>
+                                    <a href="#" onclick="setLanguage('ml','Malayalam')" class="lang-opt block px-4 py-2 text-sm text-slate-700 dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-slate-700">Malayalam (മലയാളം)</a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Session TTL badge -->
+                        <div id="session-badge" class="hidden items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-mono text-slate-600 dark:text-slate-300" title="Session auto-expires after inactivity">
+                            <i class="fa-solid fa-clock text-neon-cyan text-xs"></i>
+                            <span id="session-ttl-label">--:--</span>
+                        </div>
+
+                        <a href="/export/pdf" target="_blank" class="flex items-center gap-2 bg-slate-900 dark:bg-white text-white dark:text-gray-900 hover:bg-slate-700 dark:hover:bg-gray-100 px-4 py-2 rounded-lg font-medium text-sm transition-all shadow">
+                            <i class="fa-solid fa-file-pdf text-red-500"></i> Export PDF
+                        </a>
+
+                        <button onclick="endSession()" title="Securely delete all uploaded document data" class="flex items-center gap-1.5 border border-red-300 dark:border-red-700 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 px-3 py-2 rounded-lg font-medium text-sm transition-all">
+                            <i class="fa-solid fa-shield-xmark text-xs"></i> Clear Session
+                        </button>
+                    </div>
+                </div>
+
+                <div class="md:hidden flex items-center gap-4">
+                    <button onclick="toggleTheme()" class="text-slate-500 dark:text-slate-400 hover:text-neon-blue dark:hover:text-neon-cyan transition-colors" aria-label="Toggle Theme">
+                        <i id="theme-icon-mobile" class="fa-solid fa-sun text-lg"></i>
+                    </button>
+                    <button class="text-slate-600 dark:text-gray-300 hover:text-slate-900 dark:hover:text-white focus:outline-none">
+                        <i class="fa-solid fa-bars text-2xl"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- ═══════════════════════════ MAIN ═══════════════════════════ -->
+    <main class="pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto min-h-screen flex flex-col">
+
+        <!-- ────────── HOME VIEW ────────── -->
+        <div id="home-view" class="flex-grow flex flex-col transition-opacity duration-500 space-y-16 lg:space-y-24 pb-20">
+
+            <!-- Hero -->
+            <section class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center pt-8 lg:pt-12">
+                <div class="space-y-8 z-10">
+                    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full glass-card text-neon-blue dark:text-neon-cyan text-sm font-semibold border border-neon-blue/30 dark:border-neon-cyan/30">
+                        <span class="w-2 h-2 rounded-full bg-neon-blue dark:bg-neon-cyan animate-pulse"></span>
+                        <span id="hero-badge">v2.0 AI Engine Active</span>
+                    </div>
+                    <h1 class="text-5xl lg:text-7xl font-extrabold tracking-tight leading-tight">
+                        <span id="hero-title1" class="text-slate-900 dark:text-white">Understand Legal Documents</span><br>
+                        <span id="hero-title2" class="bg-clip-text text-transparent bg-gradient-to-r from-neon-blue to-neon-purple dark:from-neon-cyan dark:via-neon-blue dark:to-neon-purple animate-gradient-x pb-2">Instantly with AI</span>
+                    </h1>
+                    <p id="hero-sub" class="text-lg text-slate-600 dark:text-slate-400 max-w-xl leading-relaxed">
+                        Upload contracts, detect hidden risks, and get simplified explanations using our enterprise-grade AI-powered legal analysis tailored for multiple languages.
+                    </p>
+                    <div class="flex flex-col sm:flex-row gap-4">
+                        <button onclick="showSection('app-dashboard')" data-i18n="btnUpload" class="px-8 py-4 bg-gradient-to-r from-neon-blue to-neon-purple hover:from-neon-cyan hover:to-neon-blue text-white rounded-xl font-semibold shadow-[0_0_30px_rgba(59,130,246,0.3)] transition-all hover:scale-105 flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-cloud-arrow-up"></i> Upload Contract
+                        </button>
+                        <button onclick="showSection('app-dashboard')" data-i18n="btnDemo" class="px-8 py-4 glass-card hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-900 dark:text-white rounded-xl font-semibold transition-all hover:scale-105 flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-play"></i> Try Demo
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Floating Mockup -->
+                <div class="relative hidden lg:flex justify-center items-center h-full z-10">
+                    <div class="absolute inset-0 bg-gradient-to-tr from-neon-blue/20 to-neon-purple/20 rounded-full blur-3xl animate-pulse-glow"></div>
+                    <div class="glass-card w-full max-w-md p-6 rounded-2xl border border-slate-200 dark:border-slate-700 animate-float relative z-10 shadow-2xl">
+                        <div class="flex items-center justify-between mb-6 border-b border-slate-200 dark:border-slate-700 pb-4">
+                            <div class="flex gap-2">
+                                <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                                <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                                <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                            </div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400 font-mono">Scanning NDA_Draft.pdf...</div>
+                        </div>
+                        <div class="space-y-4">
+                            <div class="h-4 bg-slate-200 dark:bg-slate-700 rounded w-3/4"></div>
+                            <div class="h-4 bg-slate-200 dark:bg-slate-700 rounded w-full"></div>
+                            <div class="h-4 bg-slate-200 dark:bg-slate-700 rounded w-5/6"></div>
+                            <div class="mt-6 p-4 rounded-lg bg-red-100 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 flex items-start gap-3">
+                                <i class="fa-solid fa-triangle-exclamation text-red-500 dark:text-red-400 mt-1"></i>
+                                <div>
+                                    <div class="text-sm font-semibold text-red-600 dark:text-red-400">High Risk Detected</div>
+                                    <div class="text-xs text-slate-600 dark:text-slate-400 mt-1">Uncapped liability clause found in section 4.2.</div>
+                                </div>
+                            </div>
+                            <div class="p-4 rounded-lg bg-green-100 dark:bg-green-500/10 border border-green-200 dark:border-green-500/30 flex items-start gap-3">
+                                <i class="fa-solid fa-shield-check text-green-600 dark:text-green-400 mt-1"></i>
+                                <div>
+                                    <div class="text-sm font-semibold text-green-600 dark:text-green-400">Standard Termination</div>
+                                    <div class="text-xs text-slate-600 dark:text-slate-400 mt-1">30-day notice period aligns with industry standards.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Features -->
+            <section id="features" class="z-10 pt-10 scroll-mt-24">
+                <div class="text-center mb-12">
+                    <h2 class="text-3xl font-bold text-slate-900 dark:text-white mb-4">Supercharge Your Legal Workflow</h2>
+                    <p class="text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">Everything you need to review contracts faster, safer, and in your native language.</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <div class="glass-card p-8 rounded-2xl hover:-translate-y-2 transition-transform duration-300">
+                        <div class="w-14 h-14 rounded-xl bg-red-100 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 flex items-center justify-center mb-6">
+                            <i class="fa-solid fa-shield-halved text-2xl text-red-500 dark:text-red-400"></i>
+                        </div>
+                        <h3 class="text-xl font-bold text-slate-900 dark:text-white mb-3">Instant Risk Detection</h3>
+                        <p class="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">Automatically flag high-risk clauses, missing terms, and potential liabilities before you sign any document.</p>
+                    </div>
+                    <div class="glass-card p-8 rounded-2xl hover:-translate-y-2 transition-transform duration-300">
+                        <div class="w-14 h-14 rounded-xl bg-neon-cyan/10 border border-neon-cyan/20 flex items-center justify-center mb-6">
+                            <i class="fa-solid fa-language text-2xl text-neon-blue dark:text-neon-cyan"></i>
+                        </div>
+                        <h3 class="text-xl font-bold text-slate-900 dark:text-white mb-3">Multilingual Support</h3>
+                        <p class="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">Analyze and translate complex legal jargon into plain language across multiple regional and global languages.</p>
+                    </div>
+                    <div class="glass-card p-8 rounded-2xl hover:-translate-y-2 transition-transform duration-300">
+                        <div class="w-14 h-14 rounded-xl bg-neon-purple/10 border border-neon-purple/20 flex items-center justify-center mb-6">
+                            <i class="fa-solid fa-file-lines text-2xl text-neon-purple"></i>
+                        </div>
+                        <h3 class="text-xl font-bold text-slate-900 dark:text-white mb-3">Smart Summaries</h3>
+                        <p class="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">Turn complex, 100-page contracts into digestible bullet points, highlighting key obligations and payment terms.</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- ────────── DASHBOARD ────────── -->
+        <section id="app-dashboard" class="hidden flex-grow flex flex-col transition-opacity duration-500 gap-6">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full min-h-[800px]">
+
+                <!-- LEFT SIDEBAR -->
+                <div class="lg:col-span-4 flex flex-col gap-6">
+
+                    <!-- Upload Card -->
+                    <div class="glass-card rounded-2xl p-6 flex flex-col">
+                        <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                            <i class="fa-solid fa-file-arrow-up text-neon-blue dark:text-neon-cyan"></i> <span data-i18n="uploadTitle">Upload Legal Document</span>
+                        </h2>
+
+                        <div id="drop-zone" class="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-8 text-center hover:border-neon-blue dark:hover:border-neon-cyan transition-colors cursor-pointer bg-slate-50/50 dark:bg-slate-800/50 relative group">
+                            <input type="file" id="file-input" class="hidden" accept=".pdf,.doc,.docx,image/png,image/jpeg,image/jpg,image/webp,image/tiff,image/bmp">
+
+                            <!-- Default state -->
+                            <div id="upload-content">
+                                <div class="w-16 h-16 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                                    <i class="fa-solid fa-cloud-arrow-up text-2xl text-neon-blue"></i>
+                                </div>
+                                <p class="text-sm font-medium text-slate-700 dark:text-slate-300" data-i18n="dragDrop">Drag & drop your contract here</p>
+                                <p class="text-xs text-slate-500 mt-2" data-i18n="orClick">or click to browse</p>
+                                <div class="flex items-center justify-center flex-wrap gap-2 mt-4 text-xs text-slate-500 dark:text-slate-400">
+                                    <span class="px-2 py-1 bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 rounded font-medium">PDF</span>
+                                    <span class="px-2 py-1 bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded font-medium">DOCX</span>
+                                    <span class="px-2 py-1 bg-green-100 dark:bg-green-500/20 text-green-600 dark:text-green-400 rounded font-medium">JPG</span>
+                                    <span class="px-2 py-1 bg-green-100 dark:bg-green-500/20 text-green-600 dark:text-green-400 rounded font-medium">PNG</span>
+                                    <span class="px-2 py-1 bg-green-100 dark:bg-green-500/20 text-green-600 dark:text-green-400 rounded font-medium">TIFF</span>
+                                </div>
+                                <p class="text-[10px] text-slate-400 mt-2">Images are processed via OCR automatically</p>
+                            </div>
+
+                            <!-- Progress state -->
+                            <div id="upload-progress" class="hidden flex-col items-center justify-center w-full mt-4">
+                                <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 mb-2 overflow-hidden">
+                                    <div id="progress-bar" class="bg-gradient-to-r from-neon-cyan to-neon-purple h-2.5 rounded-full transition-all duration-300" style="width:0%"></div>
+                                </div>
+                                <p id="upload-status" class="text-xs text-neon-blue dark:text-neon-cyan font-medium animate-pulse">Processing document...</p>
+                            </div>
+                        </div>
+
+                        <!-- File info after upload -->
+                        <div id="file-info" class="hidden mt-4 p-3 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 items-center justify-between shadow-sm">
+                            <div class="flex items-center gap-3 overflow-hidden">
+                                <span id="file-info-icon"><i class="fa-solid fa-file-pdf text-red-500 dark:text-red-400 text-xl"></i></span>
+                                <div class="truncate">
+                                    <p id="file-name" class="text-sm font-medium text-slate-800 dark:text-slate-200 truncate w-40"></p>
+                                    <p id="file-size" class="text-xs text-slate-500"></p>
+                                </div>
+                            </div>
+                            <button onclick="resetUpload()" class="text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors ml-2">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+
+                        <!-- Action buttons shown after upload -->
+                        <div id="doc-actions" class="hidden mt-4 flex gap-2">
+                            <button onclick="fetchSummary()" class="flex-1 py-2 text-xs font-semibold rounded-lg bg-neon-blue/10 text-neon-blue hover:bg-neon-blue/20 border border-neon-blue/20 transition-colors flex items-center justify-center gap-1">
+                                <i class="fa-solid fa-list-check"></i> Get Summary
+                            </button>
+                            <button onclick="fetchRisk()" class="flex-1 py-2 text-xs font-semibold rounded-lg bg-neon-purple/10 text-neon-purple hover:bg-neon-purple/20 border border-neon-purple/20 transition-colors flex items-center justify-center gap-1">
+                                <i class="fa-solid fa-shield-halved"></i> Analyze Risk
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Risk Dashboard -->
+                    <div id="risk-dashboard" class="glass-card rounded-2xl p-6 flex flex-col flex-grow opacity-50 pointer-events-none transition-opacity duration-500">
+                        <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                            <i class="fa-solid fa-chart-pie text-neon-purple"></i> <span data-i18n="riskTitle">Contract Risk Analysis</span>
+                        </h2>
+
+                        <!-- Circular gauge -->
+                        <div class="flex flex-col items-center mb-4">
+                            <div class="relative w-32 h-32">
+                                <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                                    <circle cx="50" cy="50" r="40" fill="transparent" class="stroke-slate-200 dark:stroke-slate-800" stroke-width="8"></circle>
+                                    <circle id="risk-circle" cx="50" cy="50" r="40" fill="transparent" stroke="#facc15" stroke-width="8" stroke-dasharray="251.2" stroke-dashoffset="251.2" class="transition-all duration-1000 ease-out"></circle>
+                                </svg>
+                                <div class="absolute inset-0 flex flex-col items-center justify-center">
+                                    <span id="risk-score-text" class="text-3xl font-bold text-slate-900 dark:text-white">--</span>
+                                    <span class="text-xs text-slate-500 dark:text-slate-400" data-i18n="riskScore">Risk Score</span>
+                                </div>
+                            </div>
+                            <p id="risk-level-label" class="mt-2 text-sm font-semibold text-slate-600 dark:text-slate-400"></p>
+                            <p id="risk-summary-text" class="mt-1 text-xs text-slate-500 dark:text-slate-400 text-center px-2"></p>
+                        </div>
+
+                        <!-- Risk findings list -->
+                        <div id="risk-findings" class="space-y-3 overflow-y-auto pr-1 flex-grow max-h-72">
+                            <!-- Placeholder cards shown before real data -->
+                            <div class="p-3 rounded-lg bg-white dark:bg-slate-800 border-l-4 border-red-500 flex flex-col gap-1 shadow-sm">
+                                <div class="flex justify-between items-start">
+                                    <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-200">Termination Clause</h3>
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold badge-high">HIGH</span>
+                                </div>
+                                <p class="text-xs text-slate-600 dark:text-slate-400">Upload a document to run real risk analysis.</p>
+                            </div>
+                            <div class="p-3 rounded-lg bg-white dark:bg-slate-800 border-l-4 border-yellow-500 flex flex-col gap-1 shadow-sm">
+                                <div class="flex justify-between items-start">
+                                    <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-200">Liability Clause</h3>
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold badge-medium">MEDIUM</span>
+                                </div>
+                                <p class="text-xs text-slate-600 dark:text-slate-400">Click "Analyze Risk" after uploading your PDF.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RIGHT MAIN AREA -->
+                <div class="lg:col-span-8 flex flex-col gap-6">
+
+                    <!-- Summary Panel -->
+                    <div id="summary-panel" class="glass-card rounded-2xl p-6 opacity-50 pointer-events-none transition-opacity duration-500">
+                        <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                            <i class="fa-solid fa-list-check text-neon-blue"></i> <span data-i18n="summaryTitle">Document Summary</span>
+                        </h2>
+
+                        <!-- Loading state -->
+                        <div id="summary-loading" class="hidden items-center gap-2 text-neon-blue text-sm py-4">
+                            <i class="fa-solid fa-circle-notch spin"></i> Generating summary…
+                        </div>
+
+                        <!-- Real content from backend -->
+                        <div id="summary-content" class="summary-content text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
+                            Upload a document and click <strong>Get Summary</strong> to see an AI-generated overview here.
+                        </div>
+
+                        <!-- Collapsible fallback grid (visible until summary loads) -->
+                        <div id="summary-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                            <details class="group bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 open:border-neon-blue dark:open:border-neon-cyan/50 transition-colors shadow-sm">
+                                <summary class="flex items-center justify-between p-3 font-medium cursor-pointer text-sm text-slate-800 dark:text-slate-200 list-none">
+                                    <div class="flex items-center gap-2"><i class="fa-solid fa-handshake text-neon-blue"></i> Key Obligations</div>
+                                    <i class="fa-solid fa-chevron-down text-slate-400 dark:text-slate-500 group-open:rotate-180 transition-transform"></i>
+                                </summary>
+                                <div id="obligations-content" class="p-3 pt-0 text-xs text-slate-600 dark:text-slate-400 border-t border-slate-100 dark:border-slate-700 mt-2">
+                                    Will populate after summary is generated.
+                                </div>
+                            </details>
+                            <details class="group bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 open:border-neon-blue dark:open:border-neon-cyan/50 transition-colors shadow-sm">
+                                <summary class="flex items-center justify-between p-3 font-medium cursor-pointer text-sm text-slate-800 dark:text-slate-200 list-none">
+                                    <div class="flex items-center gap-2"><i class="fa-solid fa-money-bill-wave text-green-500"></i> Payment Terms</div>
+                                    <i class="fa-solid fa-chevron-down text-slate-400 dark:text-slate-500 group-open:rotate-180 transition-transform"></i>
+                                </summary>
+                                <div id="payment-content" class="p-3 pt-0 text-xs text-slate-600 dark:text-slate-400 border-t border-slate-100 dark:border-slate-700 mt-2">
+                                    Will populate after summary is generated.
+                                </div>
+                            </details>
+                        </div>
+                    </div>
+
+                    <!-- Chat Interface -->
+                    <div class="glass-card rounded-2xl flex flex-col flex-grow relative overflow-hidden bg-white/50 dark:bg-slate-900/50">
+
+                        <!-- Chat Header -->
+                        <div class="p-4 border-b border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 backdrop-blur flex justify-between items-center z-10">
+                            <div class="flex items-center gap-3">
+                                <div class="relative">
+                                    <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-neon-blue to-neon-purple flex items-center justify-center">
+                                        <i class="fa-solid fa-scale-balanced text-white"></i>
+                                    </div>
+                                    <span class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white dark:border-slate-900 rounded-full"></span>
+                                </div>
+                                <div>
+                                    <h3 class="text-sm font-bold text-slate-900 dark:text-white" data-i18n="chatTitle">JurisAI Assistant</h3>
+                                    <p class="text-xs text-neon-blue dark:text-neon-cyan" id="chat-status" data-i18n="chatOnline">Online & Ready</p>
+                                </div>
+                            </div>
+                            <button onclick="clearChat()" class="text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors" title="Clear Chat">
+                                <i class="fa-solid fa-trash-can"></i>
+                            </button>
+                        </div>
+
+                        <!-- Messages -->
+                        <div id="chat-messages" class="flex-grow p-4 overflow-y-auto space-y-4 h-[320px] lg:h-auto">
+                            <div class="flex gap-3">
+                                <div class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center flex-shrink-0">
+                                    <i class="fa-solid fa-scale-balanced text-xs text-neon-blue dark:text-neon-cyan"></i>
+                                </div>
+                                <div class="bg-white dark:bg-slate-800 p-3 rounded-2xl rounded-tl-none border border-slate-200 dark:border-slate-700 max-w-[80%] shadow-sm">
+                                    <p class="text-sm text-slate-700 dark:text-slate-200" id="welcome-msg">Hello! I'm JurisAI. Upload a document or ask me a legal question to get started.</p>
+                                    <div class="mt-2 flex justify-end gap-2">
+                                        <button onclick="speakText(this)" class="text-slate-400 hover:text-neon-blue dark:hover:text-neon-cyan transition-colors opacity-60 hover:opacity-100" title="Read aloud">
+                                            <i class="fa-solid fa-volume-high text-xs"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Input Area -->
+                        <div class="p-4 bg-white/90 dark:bg-slate-800/90 border-t border-slate-200 dark:border-slate-700 z-10">
+                            <!-- Suggestions -->
+                            <div class="flex gap-2 overflow-x-auto pb-3 mb-1">
+                                <button onclick="fillInput(this.innerText)" data-i18n="sugg1" class="whitespace-nowrap px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-xs text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 transition-colors">Summarize this document</button>
+                                <button onclick="fillInput(this.innerText)" data-i18n="sugg2" class="whitespace-nowrap px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-xs text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 transition-colors">Explain termination clause</button>
+                                <button onclick="fillInput(this.innerText)" data-i18n="sugg3" class="whitespace-nowrap px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-xs text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 transition-colors">Are there any penalties?</button>
+                                <button onclick="fillInput(this.innerText)" class="whitespace-nowrap px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-xs text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 transition-colors">What are the main obligations?</button>
+                            </div>
+
+                            <div class="relative flex items-center">
+                                <input type="text" id="chat-input" placeholder="Ask a question about this contract..." class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-full py-3 pl-4 pr-32 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-neon-blue focus:ring-1 focus:ring-neon-blue transition-all shadow-inner">
+                                <div class="absolute right-2 flex items-center gap-1">
+                                    <button type="button" onclick="stopTTS()" id="stop-tts-btn" class="hidden w-8 h-8 flex items-center justify-center rounded-full text-red-500 hover:text-white hover:bg-red-500 transition-colors" title="Stop Audio">
+                                        <i class="fa-solid fa-circle-stop"></i>
+                                    </button>
+                                    <button type="button" onclick="toggleVoice()" id="mic-btn" class="w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+                                        <i class="fa-solid fa-microphone"></i>
+                                    </button>
+                                    <button type="button" onclick="handleChatSubmit()" class="w-8 h-8 flex items-center justify-center rounded-full bg-neon-blue text-white hover:bg-neon-cyan transition-colors shadow-lg shadow-neon-blue/30">
+                                        <i class="fa-solid fa-paper-plane text-xs relative -left-0.5 mt-0.5"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Voice Overlay -->
+    <div id="voice-overlay" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[60] hidden flex-col items-center justify-center">
+        <div class="w-24 h-24 rounded-full bg-red-500/20 flex items-center justify-center animate-pulse relative">
+            <div class="absolute inset-0 rounded-full border-4 border-red-500 border-t-transparent spin"></div>
+            <i class="fa-solid fa-microphone text-4xl text-red-500"></i>
+        </div>
+        <p class="text-white mt-6 font-medium text-lg">Listening...</p>
+        <button onclick="toggleVoice()" class="mt-8 px-6 py-2 bg-slate-800 rounded-full text-sm text-slate-300 hover:text-white border border-slate-700">Cancel</button>
+    </div>
+
+    <!-- Mobile floating mic -->
+    <button onclick="toggleVoice()" id="floating-mic" class="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-slate-800 border border-slate-600 shadow-xl flex items-center justify-center text-white z-50 hover:scale-110 transition-transform md:hidden">
+        <i class="fa-solid fa-microphone text-xl"></i>
+    </button>
+
+    <!-- Footer -->
+    <footer class="glass-nav border-t border-slate-200 dark:border-slate-800 z-10 relative">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-scale-balanced text-neon-cyan"></i>
+                <span class="font-bold text-slate-900 dark:text-white tracking-tight">JurisAI</span>
+            </div>
+            <div class="flex flex-wrap justify-center gap-6 text-sm text-slate-500 dark:text-slate-400">
+                <a href="#" class="hover:text-neon-blue dark:hover:text-neon-cyan transition-colors">About</a>
+                <a href="#" class="hover:text-neon-blue dark:hover:text-neon-cyan transition-colors">Privacy</a>
+                <a href="#" class="hover:text-neon-blue dark:hover:text-neon-cyan transition-colors">Terms</a>
+                <a href="#" class="hover:text-neon-blue dark:hover:text-neon-cyan transition-colors">Contact</a>
+            </div>
+            <div class="text-xs text-slate-500 flex items-center gap-2">
+                <i class="fa-solid fa-bolt text-neon-purple"></i> Powered by AI & RAG
+            </div>
+        </div>
+    </footer>
+
+    <!-- ══════════════════ JAVASCRIPT ══════════════════ -->
+    <script>
+    // ─── Backend base URL ───────────────────────────────────────────
+    // When served via Flask (python app.py), Flask serves index.html at /
+    // so relative URLs work perfectly. Change only if deploying separately.
+    // ── Cross-origin fetch wrapper ───────────────────────────────────────────
+    // Automatically adds credentials (cookies) and ngrok header to all requests.
+    // This is required when frontend (Vercel) and backend (ngrok) are on different origins.
+    // ── Session ID stored in localStorage (survives page refresh) ───────────
+    // Avoids cross-origin cookie issues entirely — sent as a header instead.
+    function getStoredSessionId()        { return localStorage.getItem('jurisai_session_id'); }
+    function storeSessionId(sid)         { if (sid) localStorage.setItem('jurisai_session_id', sid); }
+    function clearStoredSessionId()      { localStorage.removeItem('jurisai_session_id'); }
+
+    async function apiFetch(path, options = {}) {
+        const url = (window.__JURISAI_BACKEND_URL__ || '') + path;
+        const headers = {
+            ...(options.headers || {}),
+            'ngrok-skip-browser-warning': 'true',   // bypass ngrok interstitial page
+        };
+
+        // Attach stored session ID as header — bypasses cross-origin cookie restrictions
+        const sid = getStoredSessionId();
+        if (sid) headers['X-Session-ID'] = sid;
+
+        // Don't set Content-Type for FormData — browser sets it with boundary automatically
+        if (options.body && !(options.body instanceof FormData)) {
+            headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+        }
+
+        return fetch(url, {
+            ...options,
+            headers,
+            credentials: 'include',
+        });
+    }
+
+    // Helper: fetch JSON and automatically save session_id if returned
+    async function apiFetchJSON(path, options = {}) {
+        const res  = await apiFetch(path, options);
+        const data = await res.json();
+        if (data.session_id) storeSessionId(data.session_id);
+        return { res, data };
+    }
+
+    // ── Backend URL configuration ──────────────────────────────────────────
+    // When running locally:        BASE_URL = ''
+    // When frontend is on Vercel:  BASE_URL = your ngrok/tunnel URL
+    // This value is injected from config.js if available, else falls back to ''
+    const BASE_URL = window.__JURISAI_BACKEND_URL__ || '';
+
+    // ─── State ──────────────────────────────────────────────────────
+    let currentLanguageCode = 'en';
+    let currentFilename = null;      // filename reported by /upload
+    let isRecording = false;
+    let recognition = null;
+
+    // ─── Theme ──────────────────────────────────────────────────────
+    function toggleTheme() {
+        const isDark = document.documentElement.classList.toggle('dark');
+        localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        updateThemeIcons(isDark);
+    }
+    function updateThemeIcons(isDark) {
+        const cls = isDark ? ['fa-sun','fa-moon'] : ['fa-moon','fa-sun'];
+        ['theme-icon','theme-icon-mobile'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) { el.classList.remove(cls[0]); el.classList.add(cls[1]); }
+        });
+    }
+    (function initTheme() {
+        const dark = localStorage.theme === 'dark' || (!localStorage.theme && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.classList.toggle('dark', dark);
+        updateThemeIcons(dark);
+    })();
+
+    // ─── Navigation ─────────────────────────────────────────────────
+    function showSection(id) {
+        const home = document.getElementById('home-view');
+        const dash = document.getElementById('app-dashboard');
+        if (id === 'hero' || id === 'home-view') {
+            dash.classList.add('hidden'); home.classList.remove('hidden');
+        } else {
+            home.classList.add('hidden'); dash.classList.remove('hidden');
+        }
+    }
+
+    // ─── Translations ────────────────────────────────────────────────
+    const translations = {
+        'en': {
+            'navHome':'Home','navDashboard':'Dashboard','navFeatures':'Features','navSignIn':'Sign in',
+            'heroBadge':'v2.0 AI Engine Active','heroTitle1':'Understand Legal Documents','heroTitle2':'Instantly with AI',
+            'heroSub':'Upload contracts, detect hidden risks, and get simplified explanations using our enterprise-grade AI-powered legal analysis tailored for multiple languages.',
+            'btnUpload':'Upload Contract','btnDemo':'Try Demo','uploadTitle':'Upload Legal Document',
+            'dragDrop':'Drag & drop your contract here','orClick':'or click to browse',
+            'riskTitle':'Contract Risk Analysis','riskScore':'Risk Score','summaryTitle':'Document Summary',
+            'chatTitle':'JurisAI Assistant','chatOnline':'Online & Ready',
+            'chatPlaceholder':'Ask a question about this contract...',
+            'sugg1':'Summarize this document','sugg2':'Explain termination clause','sugg3':'Are there penalties mentioned?',
+            'welcome':"Hello! I'm JurisAI. Upload a document or ask me a legal question to get started.",
+            'switchMsg':"Language switched to English. How can I assist you today?"
+        },
+        'hi': {
+            'navHome':'होम','navDashboard':'डैशबोर्ड','navFeatures':'विशेषताएं','navSignIn':'साइन इन',
+            'heroBadge':'v2.0 AI इंजन सक्रिय','heroTitle1':'कानूनी दस्तावेजों को समझें','heroTitle2':'एआई के साथ तुरंत',
+            'heroSub':'अनुबंध अपलोड करें, छिपे हुए जोखिमों का पता लगाएं, और कई भाषाओं के लिए तैयार AI-संचालित कानूनी विश्लेषण का उपयोग करके सरलीकृत स्पष्टीकरण प्राप्त करें।',
+            'btnUpload':'अनुबंध अपलोड करें','btnDemo':'डेमो आज़माएं','uploadTitle':'कानूनी दस्तावेज़ अपलोड करें',
+            'dragDrop':'अपना अनुबंध यहाँ खींचें और छोड़ें','orClick':'या ब्राउज़ करने के लिए क्लिक करें',
+            'riskTitle':'अनुबंध जोखिम विश्लेषण','riskScore':'जोखिम स्कोर','summaryTitle':'दस्तावेज़ सारांश',
+            'chatTitle':'JurisAI सहायक','chatOnline':'ऑनलाइन और तैयार',
+            'chatPlaceholder':'इस अनुबंध के बारे में एक प्रश्न पूछें...',
+            'sugg1':'इस दस्तावेज़ का सारांश दें','sugg2':'समाप्ति खंड की व्याख्या करें','sugg3':'क्या इसमें कोई दंड उल्लिखित है?',
+            'welcome':"नमस्ते! मैं JurisAI हूँ। आरंभ करने के लिए एक दस्तावेज़ अपलोड करें या मुझसे कोई कानूनी प्रश्न पूछें।",
+            'switchMsg':"भाषा को हिंदी में बदल दिया गया है। आज मैं आपकी कैसे सहायता कर सकता हूँ?"
+        },
+        'te': {
+            'navHome':'హోమ్','navDashboard':'డాష్‌బోర్డ్','navFeatures':'లక్షణాలు','navSignIn':'సైన్ ఇన్',
+            'heroBadge':'v2.0 AI ఇంజిన్ సక్రియంగా ఉంది','heroTitle1':'చట్టపరమైన పత్రాలను అర్థం చేసుకోండి','heroTitle2':'AI తో తక్షణమే',
+            'heroSub':'బహుళ భాషల కోసం రూపొందించబడిన AI-ఆధారిత న్యాయ విశ్లేషణను ఉపయోగించి కాంట్రాక్ట్‌లను అప్‌లోడ్ చేయండి మరియు సరళీకృత వివరణలను పొందండి.',
+            'btnUpload':'కాంట్రాక్ట్ అప్‌లోడ్ చేయండి','btnDemo':'డెమో ప్రయత్నించండి','uploadTitle':'చట్టపరమైన పత్రాన్ని అప్‌లోడ్ చేయండి',
+            'dragDrop':'మీ కాంట్రాక్ట్‌ని ఇక్కడ లాగి వదలండి','orClick':'లేదా బ్రౌజ్ చేయడానికి క్లిక్ చేయండి',
+            'riskTitle':'కాంట్రాక్ట్ రిస్క్ విశ్లేషణ','riskScore':'రిస్క్ స్కోర్','summaryTitle':'పత్రం సారాంశం',
+            'chatTitle':'JurisAI అసిస్టెంట్','chatOnline':'ఆన్‌లైన్ & సిద్ధంగా ఉంది',
+            'chatPlaceholder':'ఈ కాంట్రాక్ట్ గురించి ఒక ప్రశ్న అడగండి...',
+            'sugg1':'ఈ పత్రాన్ని సంగ్రహించండి','sugg2':'రద్దు నిబంధనను వివరించండి','sugg3':'జరిమానాలు ప్రస్తావించబడ్డాయా?',
+            'welcome':"నమస్కారం! నేను JurisAI ని. ప్రారంభించడానికి పత్రాన్ని అప్‌లోడ్ చేయండి లేదా చట్టపరమైన ప్రశ్న అడగండి.",
+            'switchMsg':"భాష తెలుగుకి మార్చబడింది. ఈ రోజు నేను మీకు ఎలా సహాయం చేయగలను?"
+        },
+        'bn': {
+            'navHome':'হোম','navDashboard':'ড্যাশবোর্ড','navFeatures':'বৈশিষ্ট্য','navSignIn':'সাইন ইন',
+            'heroBadge':'v2.0 এআই ইঞ্জিন সক্রিয়','heroTitle1':'আইনি নথি বুঝুন','heroTitle2':'এআই এর মাধ্যমে সাথে সাথে',
+            'heroSub':'চুক্তি আপলোড করুন, লুকানো ঝুঁকি শনাক্ত করুন এবং এআই-চালিত আইনি বিশ্লেষণ ব্যবহার করে সরলীকৃত ব্যাখ্যা পান।',
+            'btnUpload':'চুক্তি আপলোড করুন','btnDemo':'ডেমো চেষ্টা করুন','uploadTitle':'আইনি নথি আপলোড করুন',
+            'dragDrop':'আপনার চুক্তি এখানে টেনে আনুন এবং ছেড়ে দিন','orClick':'অথবা ব্রাউজ করতে ক্লিক করুন',
+            'riskTitle':'চুক্তি ঝুঁকি বিশ্লেষণ','riskScore':'ঝুঁকি স্কোর','summaryTitle':'নথির সারাংশ',
+            'chatTitle':'JurisAI সহকারী','chatOnline':'অনলাইন এবং প্রস্তুত',
+            'chatPlaceholder':'এই চুক্তি সম্পর্কে একটি প্রশ্ন জিজ্ঞাসা করুন...',
+            'sugg1':'এই নথির সারসংক্ষেপ দিন','sugg2':'বাতিলকরণ ধারা ব্যাখ্যা করুন','sugg3':'কোনো জরিমানা উল্লেখ আছে কি?',
+            'welcome':"হ্যালো! আমি JurisAI। শুরু করতে একটি নথি আপলোড করুন বা আমাকে একটি আইনি প্রশ্ন জিজ্ঞাসা করুন।",
+            'switchMsg':"ভাষা বাংলায় পরিবর্তন করা হয়েছে। আজ আমি আপনাকে কীভাবে সাহায্য করতে পারি?"
+        },
+        'mr': {
+            'navHome':'मुख्यपृष्ठ','navDashboard':'डॅशबोर्ड','navFeatures':'वैशिष्ट्ये','navSignIn':'साइन इन करा',
+            'heroBadge':'v2.0 AI इंजिन सक्रिय','heroTitle1':'कायदेशीर कागदपत्रे समजून घ्या','heroTitle2':'AI सह त्वरित',
+            'heroSub':'करार अपलोड करा, लपलेले धोके शोधा आणि अनेक भाषांसाठी तयार AI-चालित कायदेशीर विश्लेषण वापरून सोपे स्पष्टीकरण मिळवा.',
+            'btnUpload':'करार अपलोड करा','btnDemo':'डेमो वापरून पहा','uploadTitle':'कायदेशीर दस्तऐवज अपलोड करा',
+            'dragDrop':'तुमचा करार येथे ड्रॅग आणि ड्रॉप करा','orClick':'किंवा ब्राउझ करण्यासाठी क्लिक करा',
+            'riskTitle':'करार जोखीम विश्लेषण','riskScore':'जोखीम स्कोअर','summaryTitle':'दस्तऐवज सारांश',
+            'chatTitle':'JurisAI सहाय्यक','chatOnline':'ऑनलाइन आणि तयार',
+            'chatPlaceholder':'या कराराबद्दल एक प्रश्न विचारा...',
+            'sugg1':'या दस्तऐवजाचा सारांश द्या','sugg2':'समाप्ती कलमाचे स्पष्टीकरण द्या','sugg3':'काही दंड नमूद केले आहेत का?',
+            'welcome':"नमस्कार! मी JurisAI आहे. सुरू करण्यासाठी दस्तऐवज अपलोड करा किंवा मला कायदेशीर प्रश्न विचारा.",
+            'switchMsg':"भाषा मराठीत बदलली आहे. आज मी तुम्हाला कशी मदत करू शकतो?"
+        },
+        'ta': {
+            'navHome':'முகப்பு','navDashboard':'டாஷ்போர்டு','navFeatures':'அம்சங்கள்','navSignIn':'உள்நுழைய',
+            'heroBadge':'v2.0 AI இயந்திரம் செயலில் உள்ளது','heroTitle1':'சட்ட ஆவணங்களை புரிந்து கொள்ளுங்கள்','heroTitle2':'AI உடன் உடனடியாக',
+            'heroSub':'ஒப்பந்தங்களை பதிவேற்றவும், மறைக்கப்பட்ட அபாயங்களைக் கண்டறியவும், AI-இயக்கப்படும் சட்ட பகுப்பாய்வைப் பயன்படுத்தி எளிமையான விளக்கங்களைப் பெறவும்.',
+            'btnUpload':'ஒப்பந்தத்தை பதிவேற்றவும்','btnDemo':'டெமோவை முயற்சிக்கவும்','uploadTitle':'சட்ட ஆவணத்தை பதிவேற்றவும்',
+            'dragDrop':'உங்கள் ஒப்பந்தத்தை இங்கே இழுத்து விடவும்','orClick':'அல்லது உலாவுவதற்கு கிளிக் செய்யவும்',
+            'riskTitle':'ஒப்பந்த அபாய பகுப்பாய்வு','riskScore':'அபாய மதிப்பெண்','summaryTitle':'ஆவண சுருக்கம்',
+            'chatTitle':'JurisAI உதவியாளர்','chatOnline':'ஆன்லைனில் & தயார்',
+            'chatPlaceholder':'இந்த ஒப்பந்தத்தைப் பற்றி ஒரு கேள்வி கேளுங்கள்...',
+            'sugg1':'இந்த ஆவணத்தை சுருக்கவும்','sugg2':'முடித்தல் விதியை விளக்குங்கள்','sugg3':'ஏதேனும் அபராதங்கள் குறிப்பிடப்பட்டுள்ளதா?',
+            'welcome':"வணக்கம்! நான் JurisAI. தொடங்க ஒரு ஆவணத்தை பதிவேற்றவும் அல்லது என்னிடம் ஒரு சட்ட கேள்வியை கேட்கவும்.",
+            'switchMsg':"மொழி தமிழுக்கு மாற்றப்பட்டுள்ளது. இன்று நான் உங்களுக்கு எப்படி உதவ முடியும்?"
+        },
+        'gu': {
+            'navHome':'હોમ','navDashboard':'ડેશબોર્ડ','navFeatures':'વિશેષતાઓ','navSignIn':'સાઇન ઇન કરો',
+            'heroBadge':'v2.0 AI એન્જિન સક્રિય','heroTitle1':'કાનૂની દસ્તાવેજો સમજો','heroTitle2':'AI સાથે તરત જ',
+            'heroSub':'કરારો અપલોડ કરો, છુપાયેલા જોખમો શોધો અને AI-સંચાલિત કાનૂની વિશ્લેષણ ઉપયોગ કરીને સ્પષ્ટ સ્પષ્ટતા મેળવો.',
+            'btnUpload':'કરાર અપલોડ કરો','btnDemo':'ડેમો અજમાવી જુઓ','uploadTitle':'કાનૂની દસ્તાવેજ અપલોડ કરો',
+            'dragDrop':'તમારો કરાર અહીં ખેંચો અને છોડો','orClick':'અથવા બ્રાઉઝ કરવા માટે ક્લિક કરો',
+            'riskTitle':'કરાર જોખમ વિશ્લેષણ','riskScore':'જોખમ સ્કોર','summaryTitle':'દસ્તાવેજ સારાંશ',
+            'chatTitle':'JurisAI સહાયક','chatOnline':'ઓનલાઈન અને તૈયાર',
+            'chatPlaceholder':'આ કરાર વિશે પ્રશ્ન પૂછો...',
+            'sugg1':'આ દસ્તાવેજનો સારાંશ આપો','sugg2':'સમાપ્તિ કલમ સમજાવો','sugg3':'શું કોઈ દંડનો ઉલ્લેખ છે?',
+            'welcome':"નમસ્તે! હું JurisAI છું. પ્રારંભ કરવા માટે દસ્તાવેજ અપલોડ કરો અથવા મને કાનૂની પ્રશ્ન પૂછો.",
+            'switchMsg':"ભાષા ગુજરાતીમાં બદલાઈ ગઈ છે. આજે હું તમારી કેવી રીતે મદદ કરી શકું?"
+        },
+        'kn': {
+            'navHome':'ಮುಖಪುಟ','navDashboard':'ಡ್ಯಾಶ್‌ಬೋರ್ಡ್','navFeatures':'ವೈಶಿಷ್ಟ್ಯಗಳು','navSignIn':'ಸೈನ್ ಇನ್',
+            'heroBadge':'v2.0 AI ಎಂಜಿನ್ ಸಕ್ರಿಯವಾಗಿದೆ','heroTitle1':'ಕಾನೂನು ದಾಖಲೆಗಳನ್ನು ಅರ್ಥಮಾಡಿಕೊಳ್ಳಿ','heroTitle2':'AI ನೊಂದಿಗೆ ತಕ್ಷಣ',
+            'heroSub':'ಒಪ್ಪಂದಗಳನ್ನು ಅಪ್‌ಲೋಡ್ ಮಾಡಿ, ಗುಪ್ತ ಅಪಾಯಗಳನ್ನು ಪತ್ತೆಹಚ್ಚಿ ಮತ್ತು AI-ಚಾಲಿತ ಕಾನೂನು ವಿಶ್ಲೇಷಣೆಯನ್ನು ಬಳಸಿಕೊಂಡು ಸರಳೀಕೃತ ವಿವರಣೆಗಳನ್ನು ಪಡೆಯಿರಿ.',
+            'btnUpload':'ಒಪ್ಪಂದವನ್ನು ಅಪ್‌ಲೋಡ್ ಮಾಡಿ','btnDemo':'ಡೆಮೊ ಪ್ರಯತ್ನಿಸಿ','uploadTitle':'ಕಾನೂನು ದಾಖಲೆಯನ್ನು ಅಪ್‌ಲೋಡ್ ಮಾಡಿ',
+            'dragDrop':'ನಿಮ್ಮ ಒಪ್ಪಂದವನ್ನು ಇಲ್ಲಿ ಎಳೆಯಿರಿ ಮತ್ತು ಬಿಡಿ','orClick':'ಅಥವಾ ಬ್ರೌಸ್ ಮಾಡಲು ಕ್ಲಿಕ್ ಮಾಡಿ',
+            'riskTitle':'ಒಪ್ಪಂದದ ಅಪಾಯ ವಿಶ್ಲೇಷಣೆ','riskScore':'ಅಪಾಯದ ಸ್ಕೋರ್','summaryTitle':'ದಾಖಲೆ ಸಾರಾಂಶ',
+            'chatTitle':'JurisAI ಸಹಾಯಕ','chatOnline':'ಆನ್‌ಲೈನ್ ಮತ್ತು ಸಿದ್ಧವಾಗಿದೆ',
+            'chatPlaceholder':'ಈ ಒಪ್ಪಂದದ ಬಗ್ಗೆ ಪ್ರಶ್ನೆ ಕೇಳಿ...',
+            'sugg1':'ಈ ದಾಖಲೆಯನ್ನು ಸಂಕ್ಷಿಪ್ತಗೊಳಿಸಿ','sugg2':'ಮುಕ್ತಾಯದ ಷರತ್ತನ್ನು ವಿವರಿಸಿ','sugg3':'ಯಾವುದೇ ದಂಡಗಳನ್ನು ಉಲ್ಲೇಖಿಸಲಾಗಿದೆಯೇ?',
+            'welcome':"ನಮಸ್ಕಾರ! ನಾನು JurisAI. ಪ್ರಾರಂಭಿಸಲು ದಾಖಲೆಯನ್ನು ಅಪ್‌ಲೋಡ್ ಮಾಡಿ ಅಥವಾ ಕಾನೂನು ಪ್ರಶ್ನೆಯನ್ನು ಕೇಳಿ.",
+            'switchMsg':"ಭಾಷೆಯನ್ನು ಕನ್ನಡಕ್ಕೆ ಬದಲಾಯಿಸಲಾಗಿದೆ. ಇಂದು ನಾನು ನಿಮಗೆ ಹೇಗೆ ಸಹಾಯ ಮಾಡಬಹುದು?"
+        },
+        'ml': {
+            'navHome':'ഹോം','navDashboard':'ഡാഷ്‌ബോർഡ്','navFeatures':'സവിശേഷതകൾ','navSignIn':'സൈൻ ഇൻ ചെയ്യുക',
+            'heroBadge':'v2.0 AI എഞ്ചിൻ സജീവമാണ്','heroTitle1':'നിയമപരമായ രേഖകൾ മനസ്സിലാക്കുക','heroTitle2':'AI ഉപയോഗിച്ച് ഉടനടി',
+            'heroSub':'കരാറുകൾ അപ്‌ലോഡ് ചെയ്യുക, മറഞ്ഞിരിക്കുന്ന അപകടസാധ്യതകൾ കണ്ടെത്തുക, AI-പവർഡ് നിയമ വിശകലനം ഉപയോഗിച്ച് ലളിതമായ വിശദീകരണങ്ങൾ നേടുക.',
+            'btnUpload':'കരാർ അപ്‌ലോഡ് ചെയ്യുക','btnDemo':'ഡെമോ പരീക്ഷിക്കുക','uploadTitle':'നിയമരേഖ അപ്‌ലോഡ് ചെയ്യുക',
+            'dragDrop':'നിങ്ങളുടെ കരാർ ഇവിടെ വലിച്ചിടുക','orClick':'അല്ലെങ്കിൽ ബ്രൗസ് ചെയ്യാൻ ക്ലിക്ക് ചെയ്യുക',
+            'riskTitle':'കരാർ അപകടസാധ്യത വിശകലനം','riskScore':'റിസ്ക് സ്കോർ','summaryTitle':'രേഖയുടെ സംഗ്രഹം',
+            'chatTitle':'JurisAI അസിസ്റ്റന്റ്','chatOnline':'ഓൺലൈനിലും തയ്യാറുമാണ്',
+            'chatPlaceholder':'ഈ കരാറിനെക്കുറിച്ച് ഒരു ചോദ്യം ചോദിക്കുക...',
+            'sugg1':'ഈ പ്രമാണം സംഗ്രഹിക്കുക','sugg2':'അവസാനിപ്പിക്കൽ വ്യവസ്ഥ വിശദീകരിക്കുക','sugg3':'എന്തെങ്കിലും പിഴകൾ സൂചിപ്പിച്ചിട്ടുണ്ടോ?',
+            'welcome':"നമസ്കാരം! ഞാൻ JurisAI ആണ്. ആരംഭിക്കുന്നതിന് ഒരു പ്രമാണം അപ്‌ലോഡ് ചെയ്യുക അല്ലെങ്കിൽ ഒരു നിയമപരമായ ചോദ്യം ചോദിക്കുക.",
+            'switchMsg':"ഭാഷ മലയാളത്തിലേക്ക് മാറ്റിയിരിക്കുന്നു. ഇന്ന് നിങ്ങളെ എങ്ങനെ സഹായിക്കാനാകും?"
+        }
+    };
+
+    // ─── Language ───────────────────────────────────────────────────
+    // Elements that map directly to translation keys via data-i18n attribute
+    const I18N_MAP = {
+        // Nav
+        'navHome':      '[data-i18n="navHome"]',
+        'navDashboard': '[data-i18n="navDashboard"]',
+        'navFeatures':  '[data-i18n="navFeatures"]',
+        // Upload panel
+        'uploadTitle':  '[data-i18n="uploadTitle"]',
+        'dragDrop':     '[data-i18n="dragDrop"]',
+        'orClick':      '[data-i18n="orClick"]',
+        // Risk panel
+        'riskTitle':    '[data-i18n="riskTitle"]',
+        'riskScore':    '[data-i18n="riskScore"]',
+        // Summary panel
+        'summaryTitle': '[data-i18n="summaryTitle"]',
+        // Chat
+        'chatTitle':    '[data-i18n="chatTitle"]',
+        'chatOnline':   '[data-i18n="chatOnline"]',
+    };
+
+    function setLanguage(code, name) {
+        currentLanguageCode = code;
+        document.getElementById('current-lang').innerText = name;
+
+        const t = translations[code] || translations['en'];
+
+        // 1. Update all data-i18n text nodes
+        Object.entries(I18N_MAP).forEach(([key, selector]) => {
+            document.querySelectorAll(selector).forEach(el => {
+                if (t[key]) el.innerText = t[key];
+            });
+        });
+
+        // 2. Update hero section texts (specific IDs)
+        const heroTitle1 = document.getElementById('hero-title1');
+        const heroTitle2 = document.getElementById('hero-title2');
+        const heroSub    = document.getElementById('hero-sub');
+        const heroBadge  = document.getElementById('hero-badge');
+        if (heroTitle1) heroTitle1.innerText = t.heroTitle1 || '';
+        if (heroTitle2) heroTitle2.innerText = t.heroTitle2 || '';
+        if (heroSub)    heroSub.innerText    = t.heroSub    || '';
+        if (heroBadge)  heroBadge.innerText  = t.heroBadge  || '';
+
+        // 3. Update button labels
+        document.querySelectorAll('[data-i18n="btnUpload"]').forEach(el => { if (t.btnUpload) el.innerText = t.btnUpload; });
+        document.querySelectorAll('[data-i18n="btnDemo"]').forEach(el  => { if (t.btnDemo)   el.innerText = t.btnDemo;   });
+
+        // 4. Update chat input placeholder
+        const input = document.getElementById('chat-input');
+        if (input && t.chatPlaceholder) input.placeholder = t.chatPlaceholder;
+
+        // 5. Update suggestion chips
+        const suggIds = ['sugg1','sugg2','sugg3'];
+        suggIds.forEach(k => {
+            const el = document.querySelector(`[data-i18n="${k}"]`);
+            if (el && t[k]) el.innerText = t[k];
+        });
+
+        // 6. Update welcome message if it is still the original untouched one
+        const welcomeEl = document.getElementById('welcome-msg');
+        if (welcomeEl && t.welcome) welcomeEl.innerText = t.welcome;
+
+        // 7. Update chat status line
+        const statusEl = document.getElementById('chat-status');
+        if (statusEl && t.chatOnline) statusEl.innerText = t.chatOnline;
+
+        // 8. Post a switch notification message in chat
+        if (t.switchMsg) addBotMessage(t.switchMsg);
+    }
+
+    // ─── Upload & File Handling ─────────────────────────────────────
+    const dropZone   = document.getElementById('drop-zone');
+    const fileInput  = document.getElementById('file-input');
+    const uploadContent  = document.getElementById('upload-content');
+    const uploadProgress = document.getElementById('upload-progress');
+    const progressBar    = document.getElementById('progress-bar');
+    const uploadStatus   = document.getElementById('upload-status');
+    const fileInfo   = document.getElementById('file-info');
+    const docActions = document.getElementById('doc-actions');
+
+    ['dragenter','dragover','dragleave','drop'].forEach(ev => {
+        dropZone.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); });
+        document.body.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); });
+    });
+    ['dragenter','dragover'].forEach(ev => dropZone.addEventListener(ev, () => dropZone.classList.add('border-neon-cyan')));
+    ['dragleave','drop'].forEach(ev => dropZone.addEventListener(ev, () => dropZone.classList.remove('border-neon-cyan')));
+    dropZone.addEventListener('drop', e => { handleFiles(e.dataTransfer.files); });
+    dropZone.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', function() { handleFiles(this.files); });
+
+    // Accepted types
+    const ACCEPTED_TYPES = {
+        pdf:   ['.pdf'],
+        docx:  ['.doc', '.docx'],
+        image: ['.png', '.jpg', '.jpeg', '.webp', '.tiff', '.tif', '.bmp']
+    };
+
+    function getFileCategory(filename) {
+        const ext = '.' + filename.split('.').pop().toLowerCase();
+        if (ACCEPTED_TYPES.pdf.includes(ext))   return 'pdf';
+        if (ACCEPTED_TYPES.docx.includes(ext))  return 'docx';
+        if (ACCEPTED_TYPES.image.includes(ext)) return 'image';
+        return null;
+    }
+
+    function getFileIcon(category) {
+        if (category === 'pdf')   return '<i class="fa-solid fa-file-pdf text-red-500 dark:text-red-400 text-xl"></i>';
+        if (category === 'docx')  return '<i class="fa-solid fa-file-word text-blue-500 dark:text-blue-400 text-xl"></i>';
+        if (category === 'image') return '<i class="fa-solid fa-file-image text-green-500 dark:text-green-400 text-xl"></i>';
+        return '<i class="fa-solid fa-file text-slate-400 text-xl"></i>';
+    }
+
+    function handleFiles(files) {
+        if (!files || files.length === 0) return;
+        const file = files[0];
+        const category = getFileCategory(file.name);
+
+        if (!category) {
+            addBotMessage('⚠️ Unsupported file type. Please upload a <strong>PDF</strong>, <strong>DOCX/DOC</strong>, or an image (<strong>JPG, PNG, TIFF, WEBP, BMP</strong>).');
+            return;
+        }
+
+        uploadToBackend(file, category);
+    }
+
+    async function uploadToBackend(file, category) {
+        // Show progress UI
+        uploadContent.classList.add('hidden');
+        uploadProgress.classList.remove('hidden');
+        uploadProgress.classList.add('flex');
+        progressBar.style.width = '10%';
+
+        // Status messages differ by type
+        const statusMessages = {
+            pdf:   ['Uploading PDF…', 'Extracting text…', 'Indexing chunks…'],
+            docx:  ['Uploading document…', 'Parsing DOCX…', 'Indexing chunks…'],
+            image: ['Uploading image…', 'Running OCR…', 'Indexing text…']
+        };
+        const msgs = statusMessages[category];
+        uploadStatus.innerText = msgs[0];
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        // Animate progress bar while waiting, cycling status messages
+        let fakeProgress = 10;
+        let msgIdx = 0;
+        const fakeTimer = setInterval(() => {
+            if (fakeProgress < 80) {
+                fakeProgress += 4;
+                progressBar.style.width = fakeProgress + '%';
+                if (fakeProgress > 35 && msgIdx < 1) { msgIdx = 1; uploadStatus.innerText = msgs[1]; }
+                if (fakeProgress > 60 && msgIdx < 2) { msgIdx = 2; uploadStatus.innerText = msgs[2]; }
+            }
+        }, 350);
+
+        // Choose the correct backend endpoint
+        const endpoint = category === 'pdf' ? '/upload' : '/upload_file';
+
+        try {
+            const rawRes = await apiFetch(`${endpoint}`, { method: 'POST', body: formData });
+            const data = await rawRes.json();
+            const res  = rawRes;
+            if (data.session_id) storeSessionId(data.session_id);
+            clearInterval(fakeTimer);
+
+            if (!res.ok || data.error) {
+                showUploadError(data.error || 'Upload failed.');
+                return;
+            }
+
+            // Success
+            progressBar.style.width = '100%';
+            uploadStatus.innerText = '✓ Done!';
+            currentFilename = data.filename;
+
+            setTimeout(() => {
+                uploadProgress.classList.add('hidden');
+                uploadProgress.classList.remove('flex');
+                uploadContent.classList.remove('hidden');
+
+                // Show file info with correct icon
+                document.getElementById('file-info-icon').innerHTML = getFileIcon(category);
+                document.getElementById('file-name').innerText = file.name;
+                document.getElementById('file-size').innerText = formatBytes(file.size);
+                fileInfo.classList.remove('hidden');
+                fileInfo.classList.add('flex');
+
+                docActions.classList.remove('hidden');
+                docActions.classList.add('flex');
+                enablePanels();
+
+                const typeLabel = category === 'image' ? 'image (OCR applied)' : category.toUpperCase();
+                addBotMessage(`✅ <strong>${file.name}</strong> uploaded as <em>${typeLabel}</em> and indexed successfully! You can now ask questions, get a summary, or run risk analysis.`);
+            }, 600);
+
+        } catch (err) {
+            clearInterval(fakeTimer);
+            showUploadError('Network error — is the Flask server running?');
+        }
+    }
+
+    function showUploadError(msg) {
+        uploadProgress.classList.add('hidden');
+        uploadProgress.classList.remove('flex');
+        uploadContent.classList.remove('hidden');
+        progressBar.style.width = '0%';
+        addBotMessage(`⚠️ ${msg}`);
+    }
+
+    function resetUpload() {
+        if (currentFilename) {
+            apiFetch(`/remove`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filename: currentFilename })
+            }).catch(() => {});
+            currentFilename = null;
+        }
+        fileInfo.classList.add('hidden');
+        fileInfo.classList.remove('flex');
+        docActions.classList.add('hidden');
+        docActions.classList.remove('flex');
+        uploadContent.classList.remove('hidden');
+        progressBar.style.width = '0%';
+        fileInput.value = '';
+        disablePanels();
+        resetRiskGauge();
+        document.getElementById('summary-content').innerText = 'Upload a document and click Get Summary to see an AI-generated overview here.';
+        addBotMessage('Document removed. Upload a new PDF to continue.');
+    }
+
+    function enablePanels() {
+        document.getElementById('risk-dashboard').classList.remove('opacity-50', 'pointer-events-none');
+        document.getElementById('summary-panel').classList.remove('opacity-50', 'pointer-events-none');
+    }
+    function disablePanels() {
+        document.getElementById('risk-dashboard').classList.add('opacity-50', 'pointer-events-none');
+        document.getElementById('summary-panel').classList.add('opacity-50', 'pointer-events-none');
+    }
+    function formatBytes(b) {
+        if (b < 1024) return b + ' B';
+        if (b < 1024*1024) return (b/1024).toFixed(1) + ' KB';
+        return (b/(1024*1024)).toFixed(1) + ' MB';
+    }
+
+    // ─── Summary ─────────────────────────────────────────────────────
+    async function fetchSummary() {
+        const summaryLoading = document.getElementById('summary-loading');
+        const summaryContent = document.getElementById('summary-content');
+        summaryLoading.classList.remove('hidden');
+        summaryLoading.classList.add('flex');
+        summaryContent.innerText = '';
+
+        try {
+            const res = await apiFetch(`/summary?lang=${currentLanguageCode}`);
+            const data = await res.json();
+            summaryLoading.classList.add('hidden');
+            summaryLoading.classList.remove('flex');
+
+            if (data.error) {
+                summaryContent.innerText = '⚠️ ' + data.error;
+                return;
+            }
+
+            summaryContent.innerText = data.summary || 'No summary available.';
+            // Also post in chat
+            addBotMessage('📄 <strong>Summary ready!</strong> Check the Summary panel above or ask me specific questions.');
+        } catch (err) {
+            summaryLoading.classList.add('hidden');
+            summaryLoading.classList.remove('flex');
+            summaryContent.innerText = '⚠️ Could not reach the server.';
+        }
+    }
+
+    // ─── Risk Analysis ───────────────────────────────────────────────
+    async function fetchRisk() {
+        const findingsEl = document.getElementById('risk-findings');
+        findingsEl.innerHTML = `<div class="flex items-center gap-2 text-neon-purple text-sm py-4"><i class="fa-solid fa-circle-notch spin"></i> Running NLP risk analysis…</div>`;
+        resetRiskGauge();
+
+        try {
+            const res = await apiFetch(`/risk?lang=${currentLanguageCode}`);
+            const data = await res.json();
+
+            if (data.error) {
+                findingsEl.innerHTML = `<p class="text-sm text-red-400">⚠️ ${data.error}</p>`;
+                return;
+            }
+
+            renderRiskGauge(data.risk_score, data.risk_level);
+            renderRiskFindings(data.findings);
+            document.getElementById('risk-summary-text').innerText = data.summary || '';
+
+            addBotMessage(`🛡️ Risk analysis complete. Overall risk: <strong>${data.risk_level}</strong> (score ${data.risk_score}/100). Found ${data.findings.length} clause(s) flagged.`);
+        } catch (err) {
+            findingsEl.innerHTML = `<p class="text-sm text-red-400">⚠️ Could not reach the server.</p>`;
+        }
+    }
+
+    function resetRiskGauge() {
+        document.getElementById('risk-circle').style.strokeDashoffset = '251.2';
+        document.getElementById('risk-score-text').innerText = '--';
+        document.getElementById('risk-level-label').innerText = '';
+        document.getElementById('risk-summary-text').innerText = '';
+    }
+
+    function renderRiskGauge(score, level) {
+        const colorMap = { High: '#ef4444', Medium: '#eab308', Low: '#22c55e' };
+        const circle = document.getElementById('risk-circle');
+        const scoreEl = document.getElementById('risk-score-text');
+        const levelEl = document.getElementById('risk-level-label');
+
+        circle.setAttribute('stroke', colorMap[level] || '#eab308');
+        const offset = 251.2 * ((100 - score) / 100);
+        circle.style.strokeDashoffset = offset;
+
+        // Count-up animation
+        let count = 0;
+        const timer = setInterval(() => {
+            count = Math.min(count + 2, score);
+            scoreEl.innerText = count;
+            if (count >= score) clearInterval(timer);
+        }, 20);
+
+        levelEl.innerText = level + ' Risk';
+        levelEl.className = 'mt-2 text-sm font-semibold ' +
+            (level === 'High' ? 'text-red-400' : level === 'Medium' ? 'text-yellow-400' : 'text-green-400');
+    }
+
+    function renderRiskFindings(findings) {
+        const el = document.getElementById('risk-findings');
+        if (!findings || findings.length === 0) {
+            el.innerHTML = '<p class="text-sm text-slate-500 dark:text-slate-400">No risk clauses detected.</p>';
+            return;
+        }
+        el.innerHTML = findings.map(f => {
+            const badgeClass = `badge-${f.level}`;
+            const borderClass = `risk-${f.level}`;
+            const excerpt = f.excerpt ? `<p class="text-xs text-slate-400 mt-1 italic truncate" title="${escHtml(f.excerpt)}">${escHtml(f.excerpt.slice(0, 100))}…</p>` : '';
+            return `
+            <div class="p-3 rounded-lg bg-white dark:bg-slate-800 border-l-4 ${borderClass} flex flex-col gap-1 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                <div class="flex justify-between items-start gap-2">
+                    <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-200">${escHtml(f.label)}</h3>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold whitespace-nowrap ${badgeClass}">${f.level.toUpperCase()}</span>
+                </div>
+                <p class="text-xs text-slate-600 dark:text-slate-400">${escHtml(f.explanation)}</p>
+                ${excerpt}
+                <span class="text-[10px] text-slate-400 mt-1">Detected by: ${f.detected_by}</span>
+            </div>`;
+        }).join('');
+    }
+
+    function escHtml(str) {
+        return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // ─── Chat ────────────────────────────────────────────────────────
+    const chatMessages = document.getElementById('chat-messages');
+    const chatInput    = document.getElementById('chat-input');
+
+    function fillInput(text) { chatInput.value = text; chatInput.focus(); }
+
+    chatInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleChatSubmit(); } });
+
+    async function handleChatSubmit() {
+        const text = chatInput.value.trim();
+        if (!text) return;
+        addUserMessage(text);
+        chatInput.value = '';
+
+        showTypingIndicator();
+        document.getElementById('chat-status').innerText = 'Thinking…';
+
+        try {
+            const res = await apiFetch(`/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: text, lang: currentLanguageCode })
+            });
+            const data = await res.json();
+            removeTypingIndicator();
+            document.getElementById('chat-status').innerText = 'Online & Ready';
+
+            if (data.error) {
+                addBotMessage(`⚠️ ${data.error}`);
+            } else {
+                addBotMessage(data.reply || 'No response received.');
+            }
+        } catch (err) {
+            removeTypingIndicator();
+            document.getElementById('chat-status').innerText = 'Online & Ready';
+            addBotMessage('⚠️ Could not reach the server. Is Flask running on port 5000?');
+        }
+    }
+
+    function addUserMessage(text) {
+        chatMessages.insertAdjacentHTML('beforeend', `
+            <div class="flex gap-3 justify-end">
+                <div class="bg-neon-blue text-white p-3 rounded-2xl rounded-tr-none max-w-[80%] shadow-md">
+                    <p class="text-sm">${escHtml(text)}</p>
+                </div>
+            </div>`);
+        scrollToBottom();
+    }
+
+    function addBotMessage(html) {
+        chatMessages.insertAdjacentHTML('beforeend', `
+            <div class="flex gap-3">
+                <div class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center flex-shrink-0">
+                    <i class="fa-solid fa-scale-balanced text-xs text-neon-blue dark:text-neon-cyan"></i>
+                </div>
+                <div class="bg-white dark:bg-slate-800 p-3 rounded-2xl rounded-tl-none border border-slate-200 dark:border-slate-700 max-w-[80%] shadow-sm">
+                    <p class="text-sm text-slate-700 dark:text-slate-200">${html}</p>
+                    <div class="mt-2 flex justify-end gap-2">
+                        <button onclick="speakText(this)" class="text-slate-400 hover:text-neon-blue dark:hover:text-neon-cyan transition-colors opacity-60 hover:opacity-100" title="Read aloud">
+                            <i class="fa-solid fa-volume-high text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>`);
+        scrollToBottom();
+    }
+
+    function showTypingIndicator() {
+        chatMessages.insertAdjacentHTML('beforeend', `
+            <div id="typing-indicator" class="flex gap-3">
+                <div class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center flex-shrink-0">
+                    <i class="fa-solid fa-scale-balanced text-xs text-neon-blue dark:text-neon-cyan"></i>
+                </div>
+                <div class="bg-white dark:bg-slate-800 p-3 rounded-2xl rounded-tl-none border border-slate-200 dark:border-slate-700 flex items-center gap-1 shadow-sm">
+                    <div class="w-2 h-2 bg-slate-400 rounded-full typing-dot"></div>
+                    <div class="w-2 h-2 bg-slate-400 rounded-full typing-dot"></div>
+                    <div class="w-2 h-2 bg-slate-400 rounded-full typing-dot"></div>
+                </div>
+            </div>`);
+        scrollToBottom();
+    }
+    function removeTypingIndicator() { document.getElementById('typing-indicator')?.remove(); }
+
+    function clearChat() {
+        stopTTS();
+        chatMessages.innerHTML = '';
+        addBotMessage("Hello! I'm JurisAI. Upload a document or ask me a legal question to get started.");
+    }
+
+    function scrollToBottom() { chatMessages.scrollTop = chatMessages.scrollHeight; }
+
+    // ─── TTS via backend /tts (gTTS) ────────────────────────────────
+    let currentAudio = null;
+
+    function stopTTS() {
+        if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+        window.speechSynthesis?.cancel();
+        document.getElementById('stop-tts-btn')?.classList.add('hidden');
+        document.querySelectorAll('#chat-messages .fa-stop').forEach(icon => {
+            icon.classList.remove('fa-stop','text-neon-blue','dark:text-neon-cyan');
+            icon.classList.add('fa-volume-high');
+        });
+    }
+
+    async function speakText(btnEl) {
+        const icon = btnEl.querySelector('i');
+        const isPlaying = icon.classList.contains('fa-stop');
+        stopTTS();
+        if (isPlaying) return;
+
+        // Extract plain text from the sibling <p>
+        const textEl = btnEl.closest('div.bg-white, div.bg-neon-blue')?.querySelector('p');
+        if (!textEl) return;
+        const rawText = textEl.innerText.trim();
+        if (!rawText) return;
+
+        icon.classList.remove('fa-volume-high');
+        icon.classList.add('fa-stop','text-neon-blue');
+        document.getElementById('stop-tts-btn')?.classList.remove('hidden');
+
+        try {
+            const res = await apiFetch(`/tts`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: rawText, lang: currentLanguageCode })
+            });
+            if (!res.ok) throw new Error('TTS failed');
+            const blob = await res.blob();
+            const url  = URL.createObjectURL(blob);
+            currentAudio = new Audio(url);
+            currentAudio.onended = stopTTS;
+            currentAudio.onerror = stopTTS;
+            currentAudio.play();
+        } catch (e) {
+            // Fallback: browser speechSynthesis
+            const utt = new SpeechSynthesisUtterance(rawText);
+            const langMap = { en:'en-US', hi:'hi-IN', te:'te-IN', bn:'bn-IN', mr:'mr-IN', ta:'ta-IN', gu:'gu-IN', kn:'kn-IN', ml:'ml-IN' };
+            utt.lang = langMap[currentLanguageCode] || 'en-US';
+            utt.onend = stopTTS;
+            utt.onerror = stopTTS;
+            window.speechSynthesis.speak(utt);
+        }
+    }
+
+    // ─── Voice Input (Speech-to-Text) ────────────────────────────────
+    function toggleVoice() {
+        isRecording = !isRecording;
+        const overlay  = document.getElementById('voice-overlay');
+        const micBtn   = document.getElementById('mic-btn');
+
+        if (isRecording) {
+            overlay.classList.remove('hidden');
+            overlay.classList.add('flex');
+            micBtn?.classList.add('text-red-500');
+
+            // Use Web Speech API if available
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (SpeechRecognition) {
+                recognition = new SpeechRecognition();
+                recognition.lang = currentLanguageCode === 'en' ? 'en-US' : currentLanguageCode;
+                recognition.interimResults = false;
+                recognition.maxAlternatives = 1;
+
+                recognition.onresult = (event) => {
+                    const transcript = event.results[0][0].transcript;
+                    chatInput.value = transcript;
+                    stopVoice();
+                };
+                recognition.onerror = () => stopVoice();
+                recognition.onend   = () => { if (isRecording) stopVoice(); };
+                recognition.start();
+            } else {
+                // No speech API — auto-stop after 3s
+                setTimeout(stopVoice, 3000);
+            }
+        } else {
+            stopVoice();
+        }
+    }
+
+    function stopVoice() {
+        isRecording = false;
+        recognition?.stop();
+        document.getElementById('voice-overlay').classList.add('hidden');
+        document.getElementById('voice-overlay').classList.remove('flex');
+        document.getElementById('mic-btn')?.classList.remove('text-red-500');
+    }
+
+
+    // ─── Session Management ──────────────────────────────────────────────────
+
+    // Poll session TTL every 30 seconds and display countdown in nav
+    let _sessionPollTimer = null;
+
+    function formatTTL(seconds) {
+        if (seconds < 0) return 'Expired';
+        const m = String(Math.floor(seconds / 60)).padStart(2, '0');
+        const s = String(seconds % 60).padStart(2, '0');
+        return `${m}:${s}`;
+    }
+
+    async function pollSessionInfo() {
+        try {
+            const { res, data } = await apiFetchJSON('/session/info');
+            const badge = document.getElementById('session-badge');
+            const label = document.getElementById('session-ttl-label');
+            if (!badge || !label) return;
+
+            const ttl = data.ttl_seconds ?? -1;
+            label.textContent = formatTTL(ttl);
+            badge.classList.remove('hidden');
+            badge.classList.add('flex');
+
+            // Warn user when session is about to expire (< 3 minutes)
+            if (ttl > 0 && ttl < 180) {
+                badge.classList.add('border-orange-400', 'text-orange-500');
+                badge.classList.remove('border-slate-200', 'dark:border-slate-700');
+                if (ttl < 60) {
+                    badge.classList.add('border-red-400', 'text-red-500');
+                    badge.classList.remove('border-orange-400', 'text-orange-500');
+                }
+            }
+
+            // Session expired — clear UI and notify
+            if (ttl === -1 || ttl === 0) {
+                clearInterval(_sessionPollTimer);
+                badge.classList.remove('flex');
+                badge.classList.add('hidden');
+                addBotMessage('⏰ <strong>Your session has expired.</strong> All document data has been automatically deleted for your privacy. Please refresh the page to start a new session.');
+                disablePanels();
+                resetUpload();
+            }
+        } catch (e) {
+            // silently ignore network errors during polling
+        }
+    }
+
+    function startSessionPoller() {
+        pollSessionInfo();                              // immediate first check
+        _sessionPollTimer = setInterval(pollSessionInfo, 30_000);  // every 30s
+    }
+
+    async function endSession() {
+        const confirmed = confirm(
+            '🔒 Clear Session\n\n' +
+            'This will permanently delete all uploaded document data from the server.\n\n' +
+            'Are you sure?'
+        );
+        if (!confirmed) return;
+
+        try {
+            await apiFetch('/session/end', { method: 'POST' });
+        } catch (e) { /* ignore */ }
+
+        clearStoredSessionId();
+
+        // Reset UI
+        clearInterval(_sessionPollTimer);
+        resetUpload();
+        disablePanels();
+
+        const badge = document.getElementById('session-badge');
+        if (badge) { badge.classList.remove('flex'); badge.classList.add('hidden'); }
+
+        addBotMessage('🛡️ <strong>Session cleared.</strong> All document embeddings and data have been securely deleted from the server. Refresh the page to start a new session.');
+
+        // Brief delay then reload to get a fresh session cookie
+        setTimeout(() => window.location.reload(), 3000);
+    }
+
+    function disablePanels() {
+        const summaryPanel = document.getElementById('summary-panel');
+        const riskPanel    = document.getElementById('risk-panel');
+        if (summaryPanel) summaryPanel.classList.add('opacity-40', 'pointer-events-none');
+        if (riskPanel)    riskPanel.classList.add('opacity-40', 'pointer-events-none');
+    }
+
+    // Start polling after DOM ready
+    startSessionPoller();
+
+    </script>
+</body>
+</html>
