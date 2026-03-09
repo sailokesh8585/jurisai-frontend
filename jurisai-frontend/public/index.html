@@ -520,21 +520,41 @@
     // ── Cross-origin fetch wrapper ───────────────────────────────────────────
     // Automatically adds credentials (cookies) and ngrok header to all requests.
     // This is required when frontend (Vercel) and backend (ngrok) are on different origins.
+    // ── Session ID stored in localStorage (survives page refresh) ───────────
+    // Avoids cross-origin cookie issues entirely — sent as a header instead.
+    function getStoredSessionId()        { return localStorage.getItem('jurisai_session_id'); }
+    function storeSessionId(sid)         { if (sid) localStorage.setItem('jurisai_session_id', sid); }
+    function clearStoredSessionId()      { localStorage.removeItem('jurisai_session_id'); }
+
     async function apiFetch(path, options = {}) {
         const url = (window.__JURISAI_BACKEND_URL__ || '') + path;
         const headers = {
             ...(options.headers || {}),
             'ngrok-skip-browser-warning': 'true',   // bypass ngrok interstitial page
         };
+
+        // Attach stored session ID as header — bypasses cross-origin cookie restrictions
+        const sid = getStoredSessionId();
+        if (sid) headers['X-Session-ID'] = sid;
+
         // Don't set Content-Type for FormData — browser sets it with boundary automatically
         if (options.body && !(options.body instanceof FormData)) {
             headers['Content-Type'] = headers['Content-Type'] || 'application/json';
         }
+
         return fetch(url, {
             ...options,
             headers,
-            credentials: 'include',   // send session cookie cross-origin
+            credentials: 'include',
         });
+    }
+
+    // Helper: fetch JSON and automatically save session_id if returned
+    async function apiFetchJSON(path, options = {}) {
+        const res  = await apiFetch(path, options);
+        const data = await res.json();
+        if (data.session_id) storeSessionId(data.session_id);
+        return { res, data };
     }
 
     // ── Backend URL configuration ──────────────────────────────────────────
@@ -861,8 +881,10 @@
         const endpoint = category === 'pdf' ? '/upload' : '/upload_file';
 
         try {
-            const res = await apiFetch(`${endpoint}`, { method: 'POST', body: formData });
-            const data = await res.json();
+            const rawRes = await apiFetch(`${endpoint}`, { method: 'POST', body: formData });
+            const data = await rawRes.json();
+            const res  = rawRes;
+            if (data.session_id) storeSessionId(data.session_id);
             clearInterval(fakeTimer);
 
             if (!res.ok || data.error) {
@@ -1259,8 +1281,7 @@
 
     async function pollSessionInfo() {
         try {
-            const res  = await apiFetch('/session/info');
-            const data = await res.json();
+            const { res, data } = await apiFetchJSON('/session/info');
             const badge = document.getElementById('session-badge');
             const label = document.getElementById('session-ttl-label');
             if (!badge || !label) return;
@@ -1310,6 +1331,8 @@
         try {
             await apiFetch('/session/end', { method: 'POST' });
         } catch (e) { /* ignore */ }
+
+        clearStoredSessionId();
 
         // Reset UI
         clearInterval(_sessionPollTimer);
